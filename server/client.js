@@ -3,9 +3,10 @@ var TCPTransport = require('./transport/tcp.js');
 var guid    = require('mout/random/guid');
 
 
+
 var Client = module.exports = new Class({
   Implements : [require("uclass/events")],
-  Binds : [
+      Binds : [
     'receive',
     'register',
     'disconnect',
@@ -46,10 +47,10 @@ var Client = module.exports = new Class({
 
 
       registration(self, function(err){
-          if(err)
-            return; //leaving the timeout to kill us
-          self.respond(query, "ok");
-          self.emit("registered");
+        if(err)
+          return; //leaving the timeout to kill us
+        self.respond(query, "ok");
+        self.emit("registered");
       });
     }
   },
@@ -61,7 +62,7 @@ var Client = module.exports = new Class({
       client_key    : this.client_key,
       registration_time : Math.floor(this.registration_time/1000),
       uptime: Math.floor((Date.now() - this.registration_time) / 1000),
-        //networkclient is canceled on disconnected clients
+      //networkclient is canceled on disconnected clients
       remoteAddress : this.network_client ? this.network_client.export_json() : {},
     };
   },

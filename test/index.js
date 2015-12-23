@@ -1,7 +1,6 @@
 "use strict";
 
 var expect = require('expect.js')
-var async  = require('async')
 var stripStart = require('nyks/string/stripStart');
 var range   = require('mout/array/range');
 
@@ -26,15 +25,17 @@ describe("Basic server/client chat", function(){
     it("should allow client to connect", function(done){
         var client = new Client({server_port:port});
 
-        server.once('base:registered_client', function(device){
-            expect(Object.keys(server._clientsList).length).to.be(1);
-            device = server.get_client(device.client_key);
-            device.disconnect();
-            expect(Object.keys(server._clientsList).length).to.be(0);
-            done();
-        });
-        client.connect();
-    })
+    server.once('base:registered_client', function(device){
+      expect(Object.keys(server._clientsList).length).to.be(1);
+      device = server.get_client(device.client_key);
+      device.disconnect();
+      setTimeout(function(){
+        expect(Object.keys(server._clientsList).length).to.be(0);
+        done();
+      }, 50)
+    });
+    client.connect();
+  })
 
 
     it("should support a very simple rpc definition & call", function(done){
@@ -85,22 +86,20 @@ describe("Basic server/client chat", function(){
 
           console.log("new device", device.client_key, i);
 
-          device.call_rpc("math", "sum", [2, 4], function(error, response){
+      device.call_rpc("math", "sum", [2, 4], function(error, response){
+        expect(response).to.be(6 + i);
+        checks[i] = true;
+        device.disconnect();
 
-            console.log('aaaaaa' , i)
-            expect(response).to.be(6 + i);
-            checks[i] = true;
-            device.disconnect();
-
-            if(Object.keys(checks).length == clients.length){
-              server.off('base:registered_client');
-              done();}
-          });
-        });
-        clients.forEach(function(client){ client.connect()});
+        if(Object.keys(checks).length == clients.length){
+          server.off('base:registered_client');
+          done();}
+      });
     });
-});
+    clients.forEach(function(client){ client.connect()});
+  });
 
+});
 
 
 describe("Basic server/client chat for webSocket", function(){
@@ -116,7 +115,7 @@ describe("Basic server/client chat for webSocket", function(){
     it("should allow client to connect", function(done){
 
 
-      var client = new ClientWs('http://localhost:8001/');
+    var client = new ClientWs({pingInterval : 100}); //here pingInterval is 100ms to insure close before test timeout
 
         server.once('base:registered_client', function(device){
             expect(Object.keys(server._clientsList).length).to.be(1);
@@ -126,36 +125,34 @@ describe("Basic server/client chat for webSocket", function(){
             done();
         });
 
-        client.connect(function(){console.log('client connect')});
-
-
-    })
+    client.connect(function(){console.log('client connect')} , null , 'http://localhost:8001/');
+  })
 
 
     it("should support a very simple rpc definition & call", function(done){
 
 
-      var client = new ClientWs('http://localhost:8001/');
+    var client = new ClientWs();
 
-        //very simple RPC design
-        client.register_rpc("math", "sum", function(a, b, chain){
-            //heavy computational operation goes here
-          chain(null, a + b);
-        });
+    //very simple RPC design
+    client.register_rpc("math", "sum", function(a, b, chain){
+      //heavy computational operation goes here
+      chain(null, a + b);
+    });
 
 
-        server.on('base:registered_client', function(device){
-          device = server.get_client(device.client_key);
-          device.call_rpc("math", "sum", [2, 4], function(error, response){
-            server.off('base:registered_client');
-            expect(response).to.be(6);
-            device.disconnect();
-            done();
-          });
-        });
-       client.connect(function(){console.log('client connect')});
+    server.on('base:registered_client', function(device){
+      device = server.get_client(device.client_key);
+      device.call_rpc("math", "sum", [2, 4], function(error, response){
+        server.off('base:registered_client');
+        expect(response).to.be(6);
+        device.disconnect();
+        done();
+      });
+    });
+    client.connect(function(){console.log('client connect')} , null , 'http://localhost:8001/');
 
-    })
+  })
 
 
 /*
@@ -194,3 +191,4 @@ describe("Basic server/client chat for webSocket", function(){
 
 
 });
+
