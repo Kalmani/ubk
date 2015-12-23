@@ -4,6 +4,8 @@ var guid    = require('mout/random/guid');
 var indexOf = require('mout/array/indexOf');
 
 module.exports = new Class({
+  Implements : [require("uclass/events")],
+
   Binds : [
     'receive',
     'disconnect',
@@ -14,23 +16,23 @@ module.exports = new Class({
   Delimiter : 27,
 
   _buffer    : null,
-  _connected : false,
   _stream    : null,
 
   // TLS
   secured   : false,
   client_key   : null,
 
-  initialize : function(stream, message, disconnect){
+  initialize : function(stream){
     this._buffer = new Buffer(0);
 
     // Listen TCP Stream events
     this._stream      = stream;
-    this.onMessage    = message;
-    this.onDisconnect = disconnect;
-
-    this._stream.on('data', this.receive);
-    this._stream.on('error', this.disconnect);
+    var self = this;
+    var disconnect = function(){self.emit("disconnect");}
+    this._stream.on('data' , this.receive);
+    this._stream.on('error', disconnect);
+    this._stream.on('end'  , disconnect);
+    this._stream.on('close'  , disconnect);
 
     // Load client cert when secured
     if(this._stream.encrypted != null){
@@ -45,6 +47,8 @@ module.exports = new Class({
 
   // Export client configuration
   export_json : function(){
+    if(!this._stream)
+      return null;
     return {
       type    : 'tcp',
       address : this._stream.remoteAddress,
@@ -60,7 +64,6 @@ module.exports = new Class({
   // * send back to client via event
   receive : function(chars){
 
-    this._connected = true;
     var delimiter_pos;
     this._buffer = Buffer.concat([this._buffer, chars]);
 
@@ -80,12 +83,12 @@ module.exports = new Class({
 
       // Send to client
       if(data)
-        this.onMessage(data);
+        this.emit('message' , data);
     }
   },
 
   // Send some data over the tcp stream
-  send : function(data){
+  write : function(data){
     try{
       this._stream.write(JSON.stringify(data));
       this._stream.write(String.fromCharCode(this.Delimiter));
@@ -96,15 +99,11 @@ module.exports = new Class({
 
   // On error : Kill stream
   disconnect:function(){
-    if(!this._connected)
-      return; // avoid infinite loops
-    this._connected = false;
-
-    if(this._stream != null)
-      this._stream.end();
-    this._stream = null;
-
-    this.onDisconnect();
+    try {
+      this._stream.destroy();
+    } catch(e) {
+      console.log("cant't close steam : "+e);
+    }
   },
 
 });

@@ -1,19 +1,22 @@
 var Class   = require('uclass');
-var TCPTransport = require('./transport/tcp.js');
 var guid    = require('mout/random/guid');
 
+var cmdsDispatcher  = require('../lib/cmdsDispatcher')
 
 
 var Client = module.exports = new Class({
-  Implements : [require("uclass/events")],
-      Binds : [
+  Implements : [ require("uclass/events"), cmdsDispatcher],
+  Binds : [
     'receive',
-    'register',
     'disconnect',
     'send',
     'call_rpc',
-    'write',
   ],
+
+  options : {
+    ping                    : true,
+    handelPing              : true,
+  },
 
   // Identification
   client_key : null,
@@ -25,34 +28,28 @@ var Client = module.exports = new Class({
   // Commands sent
   call_stack : {},
 
-  log : console,
-
-  initialize : function(stream, registration){
+  initialize : function(options, network_client){
     var self = this;
-    this.network_client = new TCPTransport(stream, this.receive, this.disconnect);
 
-    // Auto disconnect on timeout of 5s.
-    var timeout = setTimeout(function(c) {
-      console.log('Client timeout');
-      if(self.network_client)
-        self.network_client.disconnect();
-    }, 5000);
+    this.network_client = network_client;
 
-    this.once("registered", function(){clearTimeout(timeout) ;});
+    var disconnect = function(){self.emit("disconnect");}
+    this.network_client.on('message'   ,  this.receive);
+    this.network_client.on('disconnect',  disconnect);
 
-    var once = false;
-    this.registration = function(query){
-      if(once || !registration) return; once  = true;
-      self.registration_time  = Date.now();
-
-
-      registration(self, function(err){
-        if(err)
-          return; //leaving the timeout to kill us
-        self.respond(query, "ok");
-        self.emit("registered");
-      });
+    if(this.options.ping){
+      var intervalTime = self.options.pingInterval || 5000 ;
+      var connected = true ;
+      self._heartbeat =  setInterval(function(){
+        if(!connected)
+          return self.disconnect();
+        connected = false;
+        self.send("base" , "ping" , {}, function(response){
+          connected = true ;
+        })
+      }, intervalTime)
     }
+
   },
 
 
@@ -67,43 +64,24 @@ var Client = module.exports = new Class({
     };
   },
 
-  register : function(query) {
-
-    if(!this.network_client)
-      return; //leave the timeout to kill us
-
-    this.client_key = query.args.client_key;
-    // Check SSL client cert matches
-    var exp = this.network_client.export_json();
-    if(exp.secured && exp.name != this.client_key){
-      this.log.info("The cert (%s) does NOT match the given id %s", exp.name, this.client_key);
-      //leaving the initialize timeout to kill us
-      return;
-    }
-    this.registration(query);
-  },
 
 
   // React to received data
   receive : function(data){
+
     // Debug
     console.log("Received ", data, " from client", this.client_key);
 
-    // Got new client id
-    if( data.ns == 'base' && data.cmd == 'register'){
-      return this.register(data);
-    }
-
     // Use stored callback from call stack
     if(data.quid in this.call_stack) {
-      this.call_stack[data.quid](data.response);
+      this.call_stack[data.quid](data.response, data.error);
       delete this.call_stack[data.quid];
       return;
     }
 
-    // When no local action is found
-    // Send to clients manager
-    this.emit('received_cmd', this, data);
+    this.emit('message', data);
+
+    this._dispatch(this, data);
   },
 
 
@@ -129,39 +107,22 @@ var Client = module.exports = new Class({
 
     if(callback)
       this.call_stack[quid] = callback;
-    this.write(query);
-  },
-
-  // Low Level send raw JSON
-  write : function(data){
-    if(!this.network_client)
-      return;
-    this.network_client.send(data);
+    this.network_client.write(query);
   },
 
 
   // Low Level send raw JSON
-  respond: function(query, response, error){
+  respond: function(query, response){
     if(!this.network_client)
       return;
     query.response = response;
-    query.error    = error;
     delete query.args;
-    this.network_client.send(query);
+    this.network_client.write(query);
   },
-
 
   // Network client got disconnected, propagate
   disconnect : function(){
-    if(!this.network_client)
-      return;
-
-    var client = this.network_client;
-    this.network_client = null;
-    client.disconnect();
-
-    this.emit('disconnected', this);
-    console.log("Client %s disconnected", this.client_key);
+    this.network_client.disconnect();
   },
 
 
