@@ -6,8 +6,8 @@ var Options   = require('uclass/options');
 var once    = require('nyks/function/once');
 var guid    = require('mout/random/guid');
 var merge   = require('mout/object/merge');
-
-var cmdsDispatcher  = require('../lib/cmdsDispatcher')
+var wrap    = require('mout/function/wrap');
+var cmdsDispatcher  = require('../lib/cmdsDispatcher');
 
 module.exports = new Class({
 
@@ -43,19 +43,6 @@ module.exports = new Class({
     options = options || {};
     this.setOptions(options);
     this.client_key  = options.client_key || guid();
-
-    if(this.options.ping){
-      var intervalTime = self.options.pingInterval || 5000 ;
-      var connected = true ;
-      self._heartbeat =  setInterval(function(){
-        if(!connected)
-          return self.disconnect();
-        connected = false;
-        self.send("base" , "ping" , {}, function(response){
-          connected = true ;
-        })
-      }, intervalTime)
-    }
 
     if(this.options.handelPing)
       this.register_cmd('base', 'ping', function(client, query){
@@ -98,18 +85,36 @@ module.exports = new Class({
     if(!ondisconnect)
       ondisconnect = Function.prototype;
 
-    var chain = onconnect ;
-
-    if(this.options.regisration)
-      onconnect = function(){
+    var wrapperOnConnection = function(func){
+      if(self.options.ping){
+        var intervalTime = self.options.pingInterval || 5000 ;
+        var connected = true ;
+        self._heartbeat =  setInterval(function(){
+          if(!connected)
+            return self.disconnect();
+          connected = false;
+          self.send("base" , "ping" , {}, function(response){
+            connected = true ;
+          })
+        }, intervalTime)
+      }
+      if(self.options.regisration){
         console.log('sneding registration')
         self.send('base', 'register', merge({client_key : self.client_key}, self.options.registration_parameters), function(){
           console.log('Client has been registered');
-          chain();
+          func();
         });
+      }else {
+        func();
       }
-    onconnect    = once(onconnect);
-    ondisconnect = once(ondisconnect);
+    }
+
+    onconnect    = once(wrap(onconnect, wrapperOnConnection));
+    ondisconnect = once(function(){
+      if(self.options.ping)
+        clearInterval(self._heartbeat)
+      ondisconnect();
+    });
 
     this._transport.connect(onconnect , ondisconnect , server_addr);
   },

@@ -50,6 +50,11 @@ var Client = module.exports = new Class({
       }, intervalTime)
     }
 
+    if(this.options.handelPing){
+      this.register_cmd('base', 'ping', function(client, query){
+        return client.respond(query, "pong");
+      });
+    }
   },
 
 

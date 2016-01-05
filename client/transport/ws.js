@@ -28,7 +28,6 @@ module.exports = new Class({
 
     this.url     = server_addr.replace('http','ws') ;
     this._socket = new WebSocket(this.url)  ;
-    this._socket.on('close' , ondeconnection)
 
     this._socket.onClose   = ondeconnection ;
     this._socket.onError   = ondeconnection ;
