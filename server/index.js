@@ -30,11 +30,18 @@ var Server = module.exports = new Class({
   },
 
 
-  start_socket_server : function(chain){
+  start_socket_server : function(server , path){
     var self = this;
-    var web_sockets = new wsServer({
-      server: http.createServer().listen(self.options.socket_port, chain),
-      path : '/',
+    if(!server)
+      server = http.createServer().listen(self.options.socket_port, function(){
+        console.log("start default server on port %s" , self.options.server_port);
+      })
+    if(!path)
+      path = "/";
+
+      var web_sockets = new wsServer({
+      server: server,
+      path : path,
     });
     web_sockets.on('connection', function(stream){
       self.new_client("ws" , null , stream);
