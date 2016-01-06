@@ -62,6 +62,7 @@ module.exports = new Class({
 
   // Send a command with some args to the server
   send : function(ns, cmd, args, callback){
+
     var quid = guid();
 
     var query = {
@@ -110,11 +111,11 @@ module.exports = new Class({
     }
 
     onconnect    = once(wrap(onconnect, wrapperOnConnection));
-    ondisconnect = once(function(){
+    ondisconnect = once(wrap(ondisconnect, function(func){
       if(self.options.ping)
         clearInterval(self._heartbeat)
-      ondisconnect();
-    });
+      func();
+    }));
 
     this._transport.connect(onconnect , ondisconnect , server_addr);
   },

@@ -33,22 +33,25 @@ module.exports = new Class({
   initialize:function(options) {
     this.setOptions(options);
     this.options.server_hostname  = options.server_hostname || options.server_hostaddr;
-  },
 
-  // Initialier a crypted TLS _socket
-  _build_tls_socket : function(callback){
     var license     = this.options.license;
+
     if(license) {
-      this._tls = {
+      this.options._tls = {
         key   : license.private_key,
         cert  : license.client_certificate,
         ca    : license.ca
       };
     }
 
-    if(!this._tls.key)
+  },
+
+  // Initialier a crypted TLS _socket
+  _build_tls_socket : function(callback){
+
+    if(!this.options._tls.key)
       throw new Error("Missing private key");
-    if(!this._tls.cert)
+    if(!this.options._tls.cert)
       throw new Error("Missing certificate");
 
     // Setup TLS connection
@@ -56,7 +59,7 @@ module.exports = new Class({
       host : this.options.server_hostaddr,
       port : this.options.server_port,
       servername : this.options.server_hostname.toLowerCase(),
-    }, this._tls);
+    }, this.options._tls);
 
     console.log("Connecting with TLS to %s:%s", lnk.host, lnk.port);
 
@@ -80,19 +83,18 @@ module.exports = new Class({
   connect : function(chain, ondisconnect, server_addr) {
 
     var self = this;
-
-    console.log('sneding registration' , chain)
-
     this.options.server_hostaddr = server_addr || this.options.server_hostaddr ;
     // Secured or clear method ?
-    var is_secured    = !!(this._tls.key && this._tls.cert);
+
+    var is_secured    = !!(this.options._tls.key && this.options._tls.cert);
+
     var socket_method = is_secured ? this._build_tls_socket : this._build_net_socket;
 
     this._buffer = new Buffer(0);
     this._socket = socket_method(chain);
 
     this._socket.once('error' , function(err) {
-      self.log.warn("cant connect to server" ,JSON.stringify(err)) ;
+      console.log("cant connect to server" ,JSON.stringify(err)) ;
       ondisconnect();
     });
 
