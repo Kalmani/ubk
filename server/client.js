@@ -122,6 +122,8 @@ var Client = module.exports = new Class({
       return;
     query.response = response;
     delete query.args;
+    delete query.ns;
+    delete query.cmd;
     this.network_client.write(query);
   },
 
